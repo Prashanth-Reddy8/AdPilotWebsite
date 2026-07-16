@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: adpilot
+      POSTGRES_USER: adpilot
+      POSTGRES_PASSWORD: adpilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adpilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_BASE_URL: ${FLUTTER_API_BASE_URL:-http://localhost:8000/api/v1}
+        META_APP_ID: ${META_APP_ID:-}
+        META_API_VERSION: ${META_API_VERSION:-v23.0}
+        META_REDIRECT_URI: ${FLUTTER_META_REDIRECT_URI:-http://localhost:8080/#/meta}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

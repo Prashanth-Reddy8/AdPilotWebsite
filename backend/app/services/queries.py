@@ -26,7 +26,7 @@ async def creative_rows(
     """Return a bounded page of current creative read models."""
 
     query = (
-        select(Creative.id)
+        select(Creative.id, Creative.name)
         .join(MetaAccount, MetaAccount.id == Creative.meta_account_id)
         .join(Ad, Ad.creative_id == Creative.id)
         .join(Campaign, Campaign.id == Ad.campaign_id)
@@ -34,21 +34,34 @@ async def creative_rows(
         .where(MetaAccount.user_id == user_id)
         .distinct()
     )
+
     if search:
         term = f"%{search.strip()}%"
         query = query.where(or_(Creative.name.ilike(term), Campaign.name.ilike(term)))
+
     if product_id:
         query = query.where(Campaign.product_id == product_id)
+
     if status:
         query = query.where(Creative.recommendation_status == status)
-    total = int(await session.scalar(select(func.count()).select_from(query.subquery())) or 0)
-    ids = list(
-        (
-            await session.scalars(
-                query.order_by(Creative.name).offset((page - 1) * page_size).limit(page_size)
-            )
-        ).all()
+
+    total = int(
+        await session.scalar(
+            select(func.count()).select_from(query.subquery())
+        )
+        or 0
     )
+
+    id_rows = (
+        await session.execute(
+            query.order_by(Creative.name)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).all()
+
+    ids = [row[0] for row in id_rows]
+
     if not ids:
         return [], total
 
@@ -62,6 +75,7 @@ async def creative_rows(
             .order_by(Campaign.name)
         )
     ).all()
+
     display: dict[UUID, tuple[Creative, Campaign, Product | None]] = {}
     for creative, campaign, product in entity_rows:
         display.setdefault(creative.id, (creative, campaign, product))
@@ -75,18 +89,22 @@ async def creative_rows(
             )
         ).all()
     )
+
     latest_dates: dict[UUID, date] = {}
     for metric in metrics:
         latest_dates.setdefault(metric.creative_id, metric.metric_date)
+
     grouped: dict[UUID, list[DailyMetric]] = defaultdict(list)
     for metric in metrics:
         if metric.metric_date == latest_dates[metric.creative_id]:
             grouped[metric.creative_id].append(metric)
 
     result: list[CreativeRow] = []
+
     for creative_id in ids:
         creative, campaign, product = display[creative_id]
         rows = grouped.get(creative_id, [])
+
         performance = Performance(
             spend=sum((row.spend for row in rows), start=Decimal(0)),
             revenue=sum((row.revenue for row in rows), start=Decimal(0)),
@@ -95,6 +113,7 @@ async def creative_rows(
             purchases=sum(row.purchases for row in rows),
             reach=sum(row.reach for row in rows),
         )
+
         result.append(
             CreativeRow(
                 id=creative.id,
@@ -112,4 +131,5 @@ async def creative_rows(
                 updated_at=creative.evaluated_at,
             )
         )
+
     return result, total

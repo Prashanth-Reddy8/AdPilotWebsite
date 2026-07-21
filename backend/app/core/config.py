@@ -41,4 +41,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return one immutable-by-convention settings object per process."""
 
-    return Settings()
+    return Settings()  # type: ignore[call-arg]

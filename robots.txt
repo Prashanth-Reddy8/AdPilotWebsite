@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://adpilot-legal.pages.dev/sitemap.xml

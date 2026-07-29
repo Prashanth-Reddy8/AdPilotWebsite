@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://prashanth-reddy8.github.io/AdPilotWebsite/sitemap.xml
